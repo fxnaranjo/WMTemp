@@ -1,4 +1,4 @@
-interface Temp
+interface Temperature
 service flow
 properties {
     visible: private;
