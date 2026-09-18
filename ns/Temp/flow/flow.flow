@@ -1,0 +1,179 @@
+interface Temp
+service flow
+properties {
+    visible: private;
+    reuse: private;
+    stateless: true;
+    cacheResults: false;
+    cacheExpire: 15;
+    prefetch: false;
+    prefetchActivation: 1;
+    allowedHttpMethods: [TRACE, HEAD, DELETE, POST, GET, OPTIONS, PUT, PATCH];
+    maxRetryAttempts: 0;
+    retryInterval: 0;
+    enableAuditing: never;
+    logOn: Error only;
+    includePipeline: never;
+    validateInput: false;
+    validateOutput: false;
+}
+{
+    TRY {
+        INVOKE pub.math:multiplyFloats {
+            comment: "Multiply celsius by 9"
+            validateInput: false
+            validateOutput: false
+            input {
+                copy `celsius` -> `num1`;
+                set `num2` = "9";
+            }
+            output {
+                mapTarget {
+                    String step1Result;
+                }
+                copy `value` -> `step1Result`;
+                drop `value`;
+            }
+        }
+        INVOKE pub.math:divideFloats {
+            comment: "Divide step 1 result by 5"
+            validateInput: false
+            validateOutput: false
+            input {
+                mapSource {
+                    String step1Result;
+                }
+                mapTarget {
+                    String num1;
+                    String num2;
+                }
+                copy `step1Result` -> `num1`;
+                set `num2` = "5";
+                drop `step1Result`;
+            }
+            output {
+                mapTarget {
+                    String step2Result;
+                }
+                copy `value` -> `step2Result`;
+                drop `value`;
+            }
+        }
+        INVOKE pub.math:addFloats {
+            comment: "Add 32 to step 2 result to produce fahrenheit"
+            validateInput: false
+            validateOutput: false
+            input {
+                mapSource {
+                    String step2Result;
+                }
+                mapTarget {
+                    String num1;
+                    String num2;
+                }
+                copy `step2Result` -> `num1`;
+                set `num2` = "32";
+                drop `step2Result`;
+            }
+            output {
+                mapTarget {
+                    String fahrenheit;
+                }
+                copy `value` -> `fahrenheit`;
+                drop `value`;
+            }
+        }
+        MAP {
+            comment: "Assemble celsius and fahrenheit into a response document"
+            copy `celsius` -> `response`/`celsius`;
+            copy `fahrenheit` -> `response`/`fahrenheit`;
+        }
+        INVOKE pub.json:documentToJSON {
+            comment: "Serialise response document to JSON string"
+            validateInput: false
+            validateOutput: false
+            input {
+                mapSource {
+                    record response;
+                }
+                mapTarget {
+                    record document {
+                        allowUnspecifiedFields: true;
+                    };
+                    String loadAs;
+                }
+                copy `response`/`celsius` -> `document`/`celsius`;
+                copy `response`/`fahrenheit` -> `document`/`fahrenheit`;
+                set `loadAs` = "string";
+                drop `response`;
+            }
+            output {
+                copy `jsonObj` -> `jsonObj`;
+            }
+        }
+        INVOKE pub.flow:setHTTPResponse {
+            comment: "Write JSON string directly to HTTP response body"
+            validateInput: false
+            validateOutput: false
+            input {
+                mapSource {
+                    String jsonObj;
+                }
+                mapTarget {
+                    record httpResponse {
+                        required: false;
+                        allowUnspecifiedFields: true;
+                    } {
+                        recordList headers {
+                            required: false;
+                            allowUnspecifiedFields: true;
+                        };
+                        String responseCode {
+                            required: false;
+                        };
+                        String reasonPhrase {
+                            required: false;
+                        };
+                        String responseString {
+                            required: false;
+                        };
+                        Object responseBytes {
+                            required: false;
+                        };
+                        Object responseStream {
+                            required: false;
+                        };
+                        String responseStreamTransferEncoding {
+                            required: false;
+                        };
+                        String contentType {
+                            required: false;
+                        };
+                        String encoding {
+                            required: false;
+                        };
+                    };
+                }
+                copy `jsonObj` -> `httpResponse`/`responseString`;
+                set `httpResponse`/`contentType` = "application/json";
+                drop `jsonObj`;
+            }
+        }
+    } CATCH {
+        INVOKE pub.flow:getLastError {
+            validateInput: false
+            validateOutput: false
+            output {
+                mapTarget {
+                    String errorMessage;
+                }
+                copy `lastError`/`error` -> `errorMessage`;
+            }
+        }
+        EXIT {
+            exitFrom: "$flow"
+            signal: "FAILURE"
+            failureMessage: "celsiusToFahrenheit failed: %errorMessage%"
+        }
+    }
+}
