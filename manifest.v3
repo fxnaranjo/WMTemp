@@ -5,7 +5,7 @@
   <value name="lazy_load">yes</value>
   <value name="system_package">no</value>
   <value name="version">1.0</value>
-  <value name="name">Fxn</value>
+  <value name="name">WSTemp</value>
   <null name="startup_services"/>
   <null name="shutdown_services"/>
   <null name="replication_services"/>
